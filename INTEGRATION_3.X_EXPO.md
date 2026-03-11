@@ -18,6 +18,10 @@ In Your `app.config.ts` or `app.config.json` or `app.config.js` please add expo-
         xCodeProjectAppName: "xCodeProjectAppName", // Optional if you are still using AppDelegate.mm / AppDelegate.m
         host: "braintree-example-app.web.app",
         pathPrefix: "/braintree-payments" // Optional,
+        // Depending on which payment do you really need in the project initialize only required one
+        initializePayPal: "true",
+        initialize3DSecure: "true",
+        initializeVenmo: "true",
         appDelegateLanguage?: "swift"; // Optional if you are still using AppDelegate.mm / AppDelegate.m
       },
     ],
@@ -29,6 +33,11 @@ In Your `app.config.ts` or `app.config.json` or `app.config.js` please add expo-
 `host` - Domain that provide a .well-known/applinks.json, it need to be the same as it is defined in [Set Up App Links](https://github.com/braintree/braintree_android/blob/main/APP_LINK_SETUP.md)
 
 `pathPrefix` - Path prefix, in case of you want to separate path only to handle the context switch (Optional)
+`initializePayPal` - Boolean that determines if PayPal is used/needed (Values "true" | "false")
+`initializeVenmo` - Boolean that determines if Venmo is used/needed (Values "true" | "false")
+`initialize3DSecure` - Boolean that determines if 3D Secure is used/needed (Values "true" | "false")
+
+
 
 `appDelegateLanguage` - Indicator that tell's the plugin logic if you are still using Objective C file for AppDelegate (Optional)
 
