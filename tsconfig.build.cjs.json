@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/commonjs",
+    "module": "commonjs",
+    "verbatimModuleSyntax": false,
+    "declaration": true,
+    "declarationDir": "lib/typescript",
+    "declarationMap": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/**/__tests__/**", "**/*.test.*"]
+}
