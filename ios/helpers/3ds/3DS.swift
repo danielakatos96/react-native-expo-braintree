@@ -13,7 +13,7 @@ func prepare3DSecureData(options: [String: String]) -> BTThreeDSecureRequest {
   formatter.generatesDecimalNumbers = true
   threeDSecureRequest.amount = formatter.number(from: amount) as? NSDecimalNumber ?? 0
   threeDSecureRequest.nonce = options["nonce"]
-  
+
   // Not required optional params
   threeDSecureRequest.email = options["email"]
   let threeDsRequestPostalAddress = BTThreeDSecurePostalAddress()
@@ -26,14 +26,14 @@ func prepare3DSecureData(options: [String: String]) -> BTThreeDSecureRequest {
   threeDsRequestPostalAddress.postalCode = options["postalCode"]
   threeDsRequestPostalAddress.region = options["region"]
   threeDsRequestPostalAddress.countryCodeAlpha2 = options["countryCodeAlpha2"]
-  
+
   let threeDsRequestAdditionalInformation = BTThreeDSecureAdditionalInformation()
   threeDsRequestAdditionalInformation.shippingAddress = threeDsRequestPostalAddress
-  
+
   threeDSecureRequest.additionalInformation = threeDsRequestAdditionalInformation
   threeDSecureRequest.billingAddress = threeDsRequestPostalAddress;
   //  TODO Add posibility to customize UI
-  
+
   return threeDSecureRequest
 }
 

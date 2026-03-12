@@ -150,7 +150,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
       if let corelationId = corelationId {
         // Step 4: Return corelation id
         return resolve(corelationId)
-      } else if dataCollectorError != nil {
+      } else if let dataCollectorError = dataCollectorError {
         // Step 4: Handle Error: DataCollector error
         return reject(
           EXCEPTION_TYPES.SWIFT_EXCEPTION.rawValue,
@@ -168,26 +168,42 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock
   ) {
+    print("ExpoBraintree: Starting tokenizeCardData")
     let clientToken = options["clientToken"] ?? ""
+    print("ExpoBraintree: Client token received")
+
     // Step 1: Initialize Braintree API Client
+    print("ExpoBraintree: Step 1 - Initializing Braintree API Client")
     let apiClientOptional = BTAPIClient(authorization: clientToken)
     guard let apiClient = apiClientOptional else {
+      print("ExpoBraintree: API Client initialization failed")
       return reject(
         EXCEPTION_TYPES.SWIFT_EXCEPTION.rawValue,
         ERROR_TYPES.API_CLIENT_INITIALIZATION_ERROR.rawValue,
         NSError(domain: ERROR_TYPES.API_CLIENT_INITIALIZATION_ERROR.rawValue, code: -1))
     }
+    print("ExpoBraintree: API Client initialized successfully")
+
     // Step 2: Initialize Card Client
+    print("ExpoBraintree: Step 2 - Initializing Card Client")
     let cardClient = BTCardClient(apiClient: apiClient)
+    print("ExpoBraintree: Card Client initialized")
+
     // Step 3: Prepare Card Data
+    print("ExpoBraintree: Step 3 - Preparing Card Data")
     let card = prepareCardData(options: options)
+    print("ExpoBraintree: Card data prepared")
 
     // Step 4: Tokenize the card
+    print("ExpoBraintree: Step 4 - Tokenizing the card")
     cardClient.tokenize(card) { (cardNonce, error) in
       if let cardNonce = cardNonce {
+        print("ExpoBraintree: Card tokenization successful")
         let result = prepareBTCardNonceResult(cardNonce: cardNonce)
+        print("ExpoBraintree: Card nonce result prepared")
         return resolve(result)
       } else if let error = error {
+        print("ExpoBraintree: Card tokenization failed with error: \(error.localizedDescription)")
         return reject(
           EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
           ERROR_TYPES.CARD_TOKENIZATION_ERROR.rawValue,
@@ -198,6 +214,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
           )
         )
       } else {
+        print("ExpoBraintree: Unexpected error - both cardNonce and error are nil")
         return reject(
           EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
           ERROR_TYPES.UNEXPECTED_TOKENIZATION_ERROR.rawValue,
@@ -205,7 +222,9 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
         )
       }
     }
+    print("ExpoBraintree: Tokenization process initiated")
   }
+
   @objc(requestVenmoNonce:withResolver:withRejecter:)
   func requestVenmoNonce(
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
@@ -304,7 +323,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
     threeDSSecureRequest.threeDSecureRequestDelegate = self
 
     secureClient.startPaymentFlow(threeDSSecureRequest) {
-    (threeDSecureNonceOptional, error) -> Void in
+      (threeDSecureNonceOptional, error) -> Void in
       if let tokenizedCard = threeDSecureNonceOptional?.tokenizedCard {
         if tokenizedCard.threeDSecureInfo.liabilityShiftPossible {
           if tokenizedCard.threeDSecureInfo.liabilityShifted {
@@ -328,6 +347,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
           var result = NSMutableDictionary(dictionary: baseResult)
           result["liabilityShiftPossible"] = false
           return resolve(result)
+        }
       } else if let error = error {
         // Step 4: Handle Global Error
         return reject(
@@ -350,7 +370,6 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
   ) {
     next()
   }
-}
 
   private func prepareBTPayPalVaultRequest(options: [String: String]) -> BTPayPalVaultRequest {
     var mutableOptions = options
