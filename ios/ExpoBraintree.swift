@@ -177,28 +177,35 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
         ERROR_TYPES.API_CLIENT_INITIALIZATION_ERROR.rawValue,
         NSError(domain: ERROR_TYPES.API_CLIENT_INITIALIZATION_ERROR.rawValue, code: -1))
     }
-    // Step 2: Initialize DataCollerctor
+    // Step 2: Initialize Card Client
     let cardClient = BTCardClient(apiClient: apiClient)
+    // Step 3: Prepare Card Data
     let card = prepareCardData(options: options)
-    // Step 3: Try To Collect Device Data and make a corelation Id if that is possible
-    cardClient.tokenize(card) {
-      (cardNonce, error) -> Void in
+
+    // Step 4: Tokenize the card
+    cardClient.tokenize(card) { (cardNonce, error) in
       if let cardNonce = cardNonce {
-        // Step 4: Return corelation id
-        return resolve(prepareBTCardNonceResult(cardNonce: cardNonce))
-      } else if error != nil {
-        // Step 4: Handle Error: DataCollector error
+        let result = prepareBTCardNonceResult(cardNonce: cardNonce)
+        return resolve(result)
+      } else if let error = error {
         return reject(
           EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
           ERROR_TYPES.CARD_TOKENIZATION_ERROR.rawValue,
           NSError(
             domain: ERROR_TYPES.CARD_TOKENIZATION_ERROR.rawValue,
-            code: -1)
+            code: (error as NSError).code,
+            userInfo: ["description": error.localizedDescription]
+          )
+        )
+      } else {
+        return reject(
+          EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
+          ERROR_TYPES.UNEXPECTED_TOKENIZATION_ERROR.rawValue,
+          NSError(domain: ERROR_TYPES.UNEXPECTED_TOKENIZATION_ERROR.rawValue, code: -1)
         )
       }
     }
   }
-
   @objc(requestVenmoNonce:withResolver:withRejecter:)
   func requestVenmoNonce(
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
@@ -300,26 +307,27 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
     (threeDSecureNonceOptional, error) -> Void in
       if let tokenizedCard = threeDSecureNonceOptional?.tokenizedCard {
         if tokenizedCard.threeDSecureInfo.liabilityShiftPossible {
-            if tokenizedCard.threeDSecureInfo.liabilityShifted {
-                return resolve(prepare3DSecureNonceResult(tokenizedCard:tokenizedCard))
-            } else {
-                return reject(
-                    EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
-                    ERROR_TYPES.D_SECURE_LIABILITY_NOT_SHIFTED.rawValue,
-                    NSError(
-                      domain: ERROR_TYPES.D_SECURE_LIABILITY_NOT_SHIFTED.rawValue,
-                      code: -1)
-                  )
-            }
+          if tokenizedCard.threeDSecureInfo.liabilityShifted {
+            // 3D Secure authentication success
+            return resolve(prepare3DSecureNonceResult(tokenizedCard: tokenizedCard))
+          } else {
+            // 3D Secure authentication failed
+            return reject(
+              EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
+              ERROR_TYPES.D_SECURE_LIABILITY_NOT_SHIFTED.rawValue,
+              NSError(
+                domain: ERROR_TYPES.D_SECURE_LIABILITY_NOT_SHIFTED.rawValue,
+                code: -1,
+                userInfo: ["description": "3D Secure authentication failed. Consider asking for another form of payment."]
+              )
+            )
+          }
         } else {
-          return reject(
-            EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
-            ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.rawValue,
-            NSError(
-              domain: ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.rawValue,
-              code: -1)
-          )
-        }
+          // 3D Secure authentication was not possible
+          let baseResult = prepare3DSecureNonceResult(tokenizedCard: tokenizedCard)
+          var result = NSMutableDictionary(dictionary: baseResult)
+          result["liabilityShiftPossible"] = false
+          return resolve(result)
       } else if let error = error {
         // Step 4: Handle Global Error
         return reject(
@@ -327,10 +335,12 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
           error.localizedDescription,
           NSError(
             domain: ERROR_TYPES.D_SECURE_CARD_TOKENIZATION_ERROR.rawValue,
-            code: -1)
+            code: -1
+          )
         )
       }
     }
+  }
 
   //  Function needed for BTThreeDSecureRequestDelegate
   func onLookupComplete(
@@ -339,5 +349,47 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
     next: @escaping () -> Void
   ) {
     next()
+  }
+}
+
+  private func prepareBTPayPalVaultRequest(options: [String: String]) -> BTPayPalVaultRequest {
+    var mutableOptions = options
+    let request = BTPayPalVaultRequest()
+    request.displayName = mutableOptions["displayName"] ?? ""
+    request.billingAgreementDescription = mutableOptions["billingAgreementDescription"] ?? ""
+    return request
+  }
+
+  private func prepareBTPayPalCheckoutRequest(options: [String: String]) -> BTPayPalCheckoutRequest {
+    let amount = options["amount"] ?? ""
+    let request = BTPayPalCheckoutRequest(amount: amount)
+    request.currencyCode = options["currencyCode"] ?? "USD"
+    request.displayName = options["displayName"] ?? ""
+    request.localeCode = BTPayPalLocaleCode.en_US
+    return request
+  }
+
+  private func prepare3DSecureData(options: [String: String]) -> BTThreeDSecureRequest {
+    var mutableOptions = options
+    let request = BTThreeDSecureRequest()
+    request.amount = NSDecimalNumber(string: mutableOptions["amount"])
+    request.nonce = mutableOptions["nonce"] ?? ""
+    request.email = mutableOptions["email"] ?? ""
+    request.billingAddress = prepareBillingAddress(options: mutableOptions)
+    return request
+  }
+
+  private func prepareBillingAddress(options: [String: String]) -> BTThreeDSecurePostalAddress {
+    let address = BTThreeDSecurePostalAddress()
+    address.givenName = options["givenName"] ?? ""
+    address.surname = options["surname"] ?? ""
+    address.phoneNumber = options["phoneNumber"] ?? ""
+    address.streetAddress = options["streetAddress"] ?? ""
+    address.extendedAddress = options["extendedAddress"] ?? ""
+    address.locality = options["locality"] ?? ""
+    address.region = options["region"] ?? ""
+    address.postalCode = options["postalCode"] ?? ""
+    address.countryCodeAlpha2 = options["countryCodeAlpha2"] ?? ""
+    return address
   }
 }

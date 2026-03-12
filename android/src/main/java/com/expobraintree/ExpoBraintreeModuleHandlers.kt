@@ -31,32 +31,18 @@ class ExpoBraintreeModuleHandlers {
       mPromise.reject(EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value,
         ERROR_TYPES.USER_CANCEL_TRANSACTION_ERROR.value,
         SharedDataConverter.createError(
-          EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value, error.message
+          EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value, error.message ?: "User canceled the transaction"
         ))
       return
     }
-    
-    error.message?.let {
-      mPromise.reject(EXCEPTION_TYPES.KOTLIN_EXCEPTION.value,
-        ERROR_TYPES.TOKENIZE_VAULT_PAYMENT_ERROR.value,
-        SharedDataConverter.createError(
-          EXCEPTION_TYPES.KOTLIN_EXCEPTION.value, error.message
-        ))
-      return
-    }
-
-    mPromise.reject(EXCEPTION_TYPES.KOTLIN_EXCEPTION.value,
-      ERROR_TYPES.TOKENIZE_VAULT_PAYMENT_ERROR.value,
-      SharedDataConverter.createError(
-        EXCEPTION_TYPES.KOTLIN_EXCEPTION.value, "PayPal Error"
-      ))
+    mPromise.reject(error.message ?: "Unknown error occurred")
   }
 
   fun onCancel(error: Exception, mPromise: Promise) {
       mPromise.reject(EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value,
         ERROR_TYPES.USER_CANCEL_TRANSACTION_ERROR.value,
         SharedDataConverter.createError(
-          EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value, error.message
+          EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value, error.message ?: "User canceled the operation"
         ))
   }
 
@@ -96,42 +82,56 @@ class ExpoBraintreeModuleHandlers {
   }
 
    fun onThreeDSecureSuccessHandler(threeDSecureNonce: ThreeDSecureNonce, mPromise: Promise) {
-     if (threeDSecureNonce.threeDSecureInfo.liabilityShiftPossible && threeDSecureNonce.threeDSecureInfo.wasVerified
-     ) {
-       mPromise.reject(
-         EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-         THREE_D_SECURE_ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.value,
-         SharedDataConverter.createError(
-           EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value
-         )
-       )
-       return
-     }
-     if (threeDSecureNonce.threeDSecureInfo.liabilityShifted && threeDSecureNonce.threeDSecureInfo.wasVerified
-     ) {
-       mPromise.reject(
-         EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-         THREE_D_SECURE_ERROR_TYPES.PAYMENT_3D_SECURE_FAILED.value,
-         SharedDataConverter.createError(
-           EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value
-         )
-       )
-       return
-     }
-
-     if (threeDSecureNonce.string.isEmpty()){
-       mPromise.reject(
-         EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-         THREE_D_SECURE_ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.value,
-         SharedDataConverter.createError(
-           EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value
-         )
-       )
-       return
-     }
-
-     val result: WritableMap = CardDataConverter.createThreeDSecureDataNonce(threeDSecureNonce)
-     mPromise.resolve(result)
-     return
+       when {
+           threeDSecureNonce.threeDSecureInfo.liabilityShifted && threeDSecureNonce.threeDSecureInfo.wasVerified -> {
+               // 3DS challenge completed successfully
+               val result: WritableMap = CardDataConverter.createThreeDSecureDataNonce(threeDSecureNonce)
+               mPromise.resolve(result)
+           }
+           threeDSecureNonce.threeDSecureInfo.liabilityShiftPossible && !threeDSecureNonce.threeDSecureInfo.liabilityShifted -> {
+               // Liability shift possible but not shifted
+               mPromise.reject(
+                   EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+                   THREE_D_SECURE_ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.value,
+                   SharedDataConverter.createError(
+                       EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+                       "3D Secure authentication was possible but liability was not shifted"
+                   )
+               )
+           }
+           !threeDSecureNonce.threeDSecureInfo.liabilityShiftPossible -> {
+               // Liability shift not possible
+               mPromise.reject(
+                   EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+                   THREE_D_SECURE_ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.value,
+                   SharedDataConverter.createError(
+                       EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+                       "3D Secure authentication was not possible for this card"
+                   )
+               )
+           }
+           threeDSecureNonce.string.isEmpty() -> {
+               // Empty nonce
+               mPromise.reject(
+                   EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+                   THREE_D_SECURE_ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.value,
+                   SharedDataConverter.createError(
+                       EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+                       "3D Secure nonce is empty"
+                   )
+               )
+           }
+           else -> {
+               // Unexpected case
+               mPromise.reject(
+                   EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+                   THREE_D_SECURE_ERROR_TYPES.PAYMENT_3D_SECURE_FAILED.value,
+                   SharedDataConverter.createError(
+                       EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+                       "Unexpected 3D Secure result"
+                   )
+               )
+           }
+       }
    }
 }
