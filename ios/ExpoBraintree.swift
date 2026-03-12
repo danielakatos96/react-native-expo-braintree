@@ -12,7 +12,7 @@ import React
 @objc(ExpoBraintree)
 class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
   var threeDSecureClient: BTThreeDSecureClient? = nil
-  
+
   @objc(requestBillingAgreement:withResolver:withRejecter:)
   func requestBillingAgreement(
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
@@ -70,7 +70,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
       }
     }
   }
-  
+
   @objc(requestOneTimePayment:withResolver:withRejecter:)
   func requestOneTimePayment(
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
@@ -128,7 +128,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
       }
     }
   }
-  
+
   @objc(getDeviceDataFromDataCollector:withResolver:withRejecter:)
   func getDeviceDataFromDataCollector(
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
@@ -162,7 +162,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
       }
     }
   }
-  
+
   @objc(tokenizeCardData:withResolver:withRejecter:)
   func tokenizeCardData(
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
@@ -198,14 +198,14 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
       }
     }
   }
-  
+
   @objc(requestVenmoNonce:withResolver:withRejecter:)
   func requestVenmoNonce(
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
     reject: @escaping RCTPromiseRejectBlock
   ) {
     let clientToken = options["clientToken"] ?? ""
-    
+
     // Step 1: Initialize Braintree API Client
     let apiClientOptional = BTAPIClient(authorization: clientToken)
     guard let apiClient = apiClientOptional else {
@@ -214,15 +214,15 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
         ERROR_TYPES.API_CLIENT_INITIALIZATION_ERROR.rawValue,
         NSError(domain: ERROR_TYPES.API_CLIENT_INITIALIZATION_ERROR.rawValue, code: -1))
     }
-    
+
     // Step 2: Initialize BTVenmoClient API Client
     let venmoClient = BTVenmoClient(apiClient: apiClient)
     let vaultRequest = prepareBTVenmoRequest(options: options)
-    
+
     venmoClient.tokenize(vaultRequest) {
       (accountNonce, error) -> Void in
       if let accountNonce = accountNonce {
-        
+
         // Step 3: Handle Success: Venmo Nonce Created resolved
         return resolve(
           prepareBTVenmoAccountNonceResult(
@@ -260,7 +260,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
       }
     }
   }
-  
+
   @objc(request3DSecurePaymentCheck:withResolver:withRejecter:)
   func request3DSecurePaymentCheck(
     options: [String: String], resolve: @escaping RCTPromiseResolveBlock,
@@ -269,7 +269,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
     let clientToken = options["clientToken"] ?? ""
     let nonce = options["nonce"] ?? ""
     let amount = options["amount"] ?? ""
-    
+
     // Step 1: Initialize Braintree API Client
     let apiClientOptional = BTAPIClient(authorization: clientToken)
     guard let apiClient = apiClientOptional else {
@@ -284,7 +284,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
         ERROR_TYPES.D_SECURE_CARD_TOKENIZATION_VALIDATION_ERROR.rawValue,
         NSError(domain: ERROR_TYPES.D_SECURE_CARD_TOKENIZATION_VALIDATION_ERROR.rawValue, code: -1))
     }
-    
+
     self.threeDSecureClient = BTThreeDSecureClient(apiClient: apiClient)
     guard let secureClient = self.threeDSecureClient else {
       return reject(
@@ -292,15 +292,26 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
         ERROR_TYPES.API_CLIENT_INITIALIZATION_ERROR.rawValue,
         NSError(domain: ERROR_TYPES.API_CLIENT_INITIALIZATION_ERROR.rawValue, code: -1))
     }
-    
+
     let threeDSSecureRequest = prepare3DSecureData(options: options)
     threeDSSecureRequest.threeDSecureRequestDelegate = self
-    
+
     secureClient.startPaymentFlow(threeDSSecureRequest) {
-      (threeDSecureNonceOptional, error) -> Void in
+    (threeDSecureNonceOptional, error) -> Void in
       if let tokenizedCard = threeDSecureNonceOptional?.tokenizedCard {
-        
-        if tokenizedCard.threeDSecureInfo.liabilityShiftPossible && tokenizedCard.threeDSecureInfo.wasVerified {
+        if tokenizedCard.threeDSecureInfo.liabilityShiftPossible {
+            if tokenizedCard.threeDSecureInfo.liabilityShifted {
+                return resolve(prepare3DSecureNonceResult(tokenizedCard:tokenizedCard))
+            } else {
+                return reject(
+                    EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
+                    ERROR_TYPES.D_SECURE_LIABILITY_NOT_SHIFTED.rawValue,
+                    NSError(
+                      domain: ERROR_TYPES.D_SECURE_LIABILITY_NOT_SHIFTED.rawValue,
+                      code: -1)
+                  )
+            }
+        } else {
           return reject(
             EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
             ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.rawValue,
@@ -309,28 +320,6 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
               code: -1)
           )
         }
-        
-        if tokenizedCard.threeDSecureInfo.liabilityShifted && tokenizedCard.threeDSecureInfo.wasVerified{
-          return reject(
-            EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
-            ERROR_TYPES.D_SECURE_LIABILITY_NOT_SHIFTED.rawValue,
-            NSError(
-              domain: ERROR_TYPES.D_SECURE_LIABILITY_NOT_SHIFTED.rawValue,
-              code: -1)
-          )
-        }
-        
-        if (tokenizedCard.nonce ?? "").isEmpty {
-          return reject(
-            EXCEPTION_TYPES.TOKENIZE_EXCEPTION.rawValue,
-            ERROR_TYPES.PAYMENT_3D_SECURE_FAILED.rawValue,
-            NSError(
-              domain: ERROR_TYPES.PAYMENT_3D_SECURE_FAILED.rawValue,
-              code: -1)
-          )
-        }
-        
-        return resolve(prepare3DSecureNonceResult(tokenizedCard:tokenizedCard))
       } else if let error = error {
         // Step 4: Handle Global Error
         return reject(
@@ -342,8 +331,7 @@ class ExpoBraintree: NSObject, BTThreeDSecureRequestDelegate {
         )
       }
     }
-  }
-  
+
   //  Function needed for BTThreeDSecureRequestDelegate
   func onLookupComplete(
     _ request: BTThreeDSecureRequest,
