@@ -5,9 +5,11 @@ import com.braintreepayments.api.core.UserCanceledException
 import com.braintreepayments.api.paypal.PayPalAccountNonce
 import com.braintreepayments.api.threedsecure.ThreeDSecureNonce
 import com.braintreepayments.api.venmo.VenmoAccountNonce
+import com.braintreepayments.api.googlepay.GooglePayCardNonce
 
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.Arguments
 
 
 class ExpoBraintreeModuleHandlers {
@@ -31,18 +33,32 @@ class ExpoBraintreeModuleHandlers {
       mPromise.reject(EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value,
         ERROR_TYPES.USER_CANCEL_TRANSACTION_ERROR.value,
         SharedDataConverter.createError(
-          EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value, error.message ?: "User canceled the transaction"
+          EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value, error.message
         ))
       return
     }
-    mPromise.reject(error.message ?: "Unknown error occurred")
+    
+    error.message?.let {
+      mPromise.reject(EXCEPTION_TYPES.KOTLIN_EXCEPTION.value,
+        ERROR_TYPES.TOKENIZE_VAULT_PAYMENT_ERROR.value,
+        SharedDataConverter.createError(
+          EXCEPTION_TYPES.KOTLIN_EXCEPTION.value, error.message
+        ))
+      return
+    }
+
+    mPromise.reject(EXCEPTION_TYPES.KOTLIN_EXCEPTION.value,
+      ERROR_TYPES.TOKENIZE_VAULT_PAYMENT_ERROR.value,
+      SharedDataConverter.createError(
+        EXCEPTION_TYPES.KOTLIN_EXCEPTION.value, "PayPal Error"
+      ))
   }
 
   fun onCancel(error: Exception, mPromise: Promise) {
       mPromise.reject(EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value,
         ERROR_TYPES.USER_CANCEL_TRANSACTION_ERROR.value,
         SharedDataConverter.createError(
-          EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value, error.message ?: "User canceled the operation"
+          EXCEPTION_TYPES.USER_CANCEL_EXCEPTION.value, error.message
         ))
   }
 
@@ -73,65 +89,86 @@ class ExpoBraintreeModuleHandlers {
     mPromise.resolve(result)
   }
 
-   fun onThreeDSecureFailure(error: Exception, mPromise: Promise) {
-    mPromise.reject(EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-      ERROR_TYPES.CARD_TOKENIZATION_ERROR.value,
-      SharedDataConverter.createError(
-        EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, error.localizedMessage
-      ))
-  }
+  fun onThreeDSecureFailure(error: Exception, mPromise: Promise) {
+      // Get the most descriptive message possible
+      val errorMessage = error.message ?: error.localizedMessage ?: "Unknown 3D Secure error"
 
-   fun onThreeDSecureSuccessHandler(threeDSecureNonce: ThreeDSecureNonce, mPromise: Promise) {
-       when {
-           threeDSecureNonce.threeDSecureInfo.liabilityShifted && threeDSecureNonce.threeDSecureInfo.wasVerified -> {
-               // 3DS challenge completed successfully
-               val result: WritableMap = CardDataConverter.createThreeDSecureDataNonce(threeDSecureNonce)
-               mPromise.resolve(result)
-           }
-           threeDSecureNonce.threeDSecureInfo.liabilityShiftPossible && !threeDSecureNonce.threeDSecureInfo.liabilityShifted -> {
-               // Liability shift possible but not shifted
-               mPromise.reject(
-                   EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-                   THREE_D_SECURE_ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.value,
-                   SharedDataConverter.createError(
-                       EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-                       "3D Secure authentication was possible but liability was not shifted"
-                   )
-               )
-           }
-           !threeDSecureNonce.threeDSecureInfo.liabilityShiftPossible -> {
-               // Liability shift not possible
-               mPromise.reject(
-                   EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-                   THREE_D_SECURE_ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.value,
-                   SharedDataConverter.createError(
-                       EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-                       "3D Secure authentication was not possible for this card"
-                   )
-               )
-           }
-           threeDSecureNonce.string.isEmpty() -> {
-               // Empty nonce
-               mPromise.reject(
-                   EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-                   THREE_D_SECURE_ERROR_TYPES.D_SECURE_NOT_ABLE_TO_SHIFT_LIABILITY.value,
-                   SharedDataConverter.createError(
-                       EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-                       "3D Secure nonce is empty"
-                   )
-               )
-           }
-           else -> {
-               // Unexpected case
-               mPromise.reject(
-                   EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-                   THREE_D_SECURE_ERROR_TYPES.PAYMENT_3D_SECURE_FAILED.value,
-                   SharedDataConverter.createError(
-                       EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
-                       "Unexpected 3D Secure result"
-                   )
-               )
-           }
-       }
+      // We use the actual error message as the second argument (message) 
+      // so it's visible in the 'details' field in JS.
+      mPromise.reject(
+        EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+        errorMessage, // This replaces the generic CARD_TOKENIZATION_ERROR
+        SharedDataConverter.createError(
+          EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, 
+          errorMessage
+        )
+      )
+    }
+    
+  fun onThreeDSecureSuccessHandler(threeDSecureNonce: ThreeDSecureNonce, mPromise: Promise) {
+     val info = threeDSecureNonce.threeDSecureInfo
+
+     // Validation: Reject only if verification was attempted but failed
+     // Note: we removed 'is' prefix to fix the 'Unresolved reference' error
+     if (info.wasVerified && !info.liabilityShifted) {
+       mPromise.reject(
+         EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+         THREE_D_SECURE_ERROR_TYPES.PAYMENT_3D_SECURE_FAILED.value,
+         SharedDataConverter.createError(
+           EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, 
+           "Liability shift failed"
+         )
+       )
+       return
+     }
+
+     // Basic check for empty nonce
+     if (threeDSecureNonce.string.isEmpty()){
+       mPromise.reject(
+         EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+         "Empty nonce received",
+         SharedDataConverter.createError(
+           EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, 
+           "Empty nonce"
+         )
+       )
+       return
+     }
+
+     // If everything is fine, resolve with full data
+     try {
+       val result: WritableMap = CardDataConverter.createThreeDSecureDataNonce(threeDSecureNonce)
+       mPromise.resolve(result)
+     } catch (e: Exception) {
+       mPromise.reject(EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, e.message, e)
+     }
    }
+
+  fun onGooglePaySuccessHandler(nonce: GooglePayCardNonce, promise: Promise) {
+      val result: WritableMap = Arguments.createMap()
+      
+      // Base nonce information
+      result.putString("nonce", nonce.string)
+      result.putString("type", "GooglePayCard")
+      
+      // Card details mapping
+      val details: WritableMap = Arguments.createMap()
+      details.putString("cardType", nonce.cardType)
+      details.putString("lastFour", nonce.lastFour)
+      details.putString("lastTwo", nonce.lastTwo)
+      result.putMap("details", details)
+      
+      // Billing Address mapping (optional)
+      // Only populates if billingAddressRequired was true and user provided it
+      nonce.billingAddress?.let { address ->
+          val billingMap: WritableMap = Arguments.createMap()
+          billingMap.putString("recipientName", address.recipientName)
+          billingMap.putString("streetAddress", address.streetAddress)
+          billingMap.putString("locality", address.locality) // City
+          billingMap.putString("countryCodeAlpha2", address.countryCodeAlpha2)
+          result.putMap("billingAddress", billingMap)
+      }
+      
+      promise.resolve(result)
+  }
 }
