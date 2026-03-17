@@ -19,17 +19,31 @@ export type ExpoBraintreePluginProps = {
      */
     pathPrefix?: string;
     /**
-     * Boolean that determines if PayPal is used/needed (Values "true" | "false")
+     * Set this flag to true if you need to use requestVenmoNonce which will be using fallbackUrlScheme
+     * It will also add an intent-filter if it is not added before
+     *  <intent-filter>
+     *     <action android:name="android.intent.action.VIEW" />
+     *     <category android:name="android.intent.category.DEFAULT" />
+     *     <category android:name="android.intent.category.BROWSABLE" />
+     *     <data android:scheme="${applicationId}.braintree" />
+     *  </intent-filter>
      */
-    initializePayPal?: string;
+    addFallbackUrlScheme?: 'true' | 'false';
     /**
-     * Boolean that determines if Venmo is used/needed (Values "true" | "false")
+     * Flag that determines if we should initialize 3ds secure flow
+     * It will also add an intent-filter if it is not added before
+     *  <intent-filter>
+     *     <action android:name="android.intent.action.VIEW" />
+     *     <category android:name="android.intent.category.DEFAULT" />
+     *     <category android:name="android.intent.category.BROWSABLE" />
+     *     <data android:scheme="${applicationId}.braintree" />
+     *  </intent-filter>
      */
-    initializeVenmo?: string;
+    initialize3DSecure?: 'true' | 'false';
     /**
-     * Boolean that determines if 3D Secure is used/needed (Values "true" | "false")
+     * Flag that determines if we should initialize Google Pay
      */
-    initialize3DSecure?: string;
+    initializeGooglePay?: 'true' | 'false';
 };
 export declare const withExpoBraintreePlugin: ConfigPlugin<ExpoBraintreePluginProps>;
 declare const _default: ConfigPlugin<ExpoBraintreePluginProps>;

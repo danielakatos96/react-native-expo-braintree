@@ -1,5 +1,5 @@
 export declare enum EXCEPTION_TYPES {
-    SWIFT_EXCEPTION = "ExpoBraintree:`SwiftException",
+    KOTLIN_EXCEPTION = "ExpoBraintree:`KotlinException",
     USER_CANCEL_EXCEPTION = "ExpoBraintree:`UserCancelException",
     TOKENIZE_EXCEPTION = "ExpoBraintree:`TokenizeException"
 }
@@ -8,6 +8,10 @@ export declare enum PAYPAL_EXCEPTION_TYPES {
 }
 export declare enum VENMO_EXCEPTION_TYPES {
     VENMO_DISABLED_IN_CONFIGURATION = "ExpoBraintree:`VENMO disabled in configuration"
+}
+export declare enum GOOGLE_PAY_ERROR_TYPES {
+    GOOGLE_PAY_NOT_AVAILABLE = "GOOGLE_PAY_NOT_AVAILABLE",
+    GOOGLE_PAY_FAILED = "GOOGLE_PAY_FAILED"
 }
 export declare enum ERROR_TYPES {
     API_CLIENT_INITIALIZATION_ERROR = "API_CLIENT_INITIALIZATION_ERROR",
@@ -65,7 +69,7 @@ export type RequestOneTimePaymentOptions = {
     offerPayLater?: BoolValue;
     currencyCode?: string;
     requestBillingAgreement?: BoolValue;
-    hasUserLocationConsent?: BoolValue;
+    hasUserLocationConsent?: boolean;
     clientToken: string;
     merchantAppLink: string;
     fallbackUrlScheme?: string;
@@ -148,6 +152,16 @@ export type BTThreeDError = {
     message?: ERROR_TYPES | THREE_D_SECURE_ERROR_TYPES | string;
     domain?: ERROR_TYPES | THREE_D_SECURE_ERROR_TYPES;
 };
+export type ThreeDSecureInfo = {
+    /** True if the bank accepts responsibility for the fraud risk */
+    liabilityShifted: boolean;
+    /** True if the card is eligible for 3D Secure */
+    liabilityShiftPossible: boolean;
+    /** The status of the 3D Secure verification (e.g., 'authenticated', 'lookup_error') */
+    status: string;
+    /** Indicates if the verification process was actually performed */
+    wasVerified: boolean;
+};
 export type BTCardTokenization3DSNonceResult = {
     nonce: string;
     cardNetwork?: string;
@@ -155,10 +169,17 @@ export type BTCardTokenization3DSNonceResult = {
     lastFour?: string;
     expirationMonth?: string;
     expirationYear?: string;
+    /** Detailed 3D Secure verification results from the bank */
+    threeDSecureInfo?: ThreeDSecureInfo;
 };
+type D = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
 export type ThreeDSecureCheckOptions = {
     clientToken: string;
-    amount: string;
+    /**
+     * Transaction amount in "X.YY" format.
+     * @example "10.00"
+     */
+    amount: `${number}.${D}${D}`;
     nonce: string;
     email?: string;
     givenName?: string;
@@ -171,4 +192,43 @@ export type ThreeDSecureCheckOptions = {
     region?: string;
     countryCodeAlpha2?: string;
 };
+export declare enum GOOGLE_PAY_TOTAL_PRICE_STATUS {
+    /** The total price is an estimated price and might still change (maps to 1 in Kotlin) */
+    ESTIMATED = 1,
+    /** The total price is the final price and will not change (maps to 3/else in Kotlin) */
+    FINAL = 3
+}
+export type RequestGooglePayOptions = {
+    clientToken: string;
+    totalPrice: string;
+    currencyCode: string;
+    totalPriceStatus?: GOOGLE_PAY_TOTAL_PRICE_STATUS;
+    googleMerchantName?: string;
+    billingAddressRequired?: boolean;
+    emailRequired?: boolean;
+    phoneNumberRequired?: boolean;
+    shippingAddressRequired?: boolean;
+    allowPrepaidCards?: boolean;
+};
+export type BTGooglePayNonceResult = {
+    nonce: string;
+    type: 'GooglePayCard';
+    description: string;
+    details: {
+        cardType: string;
+        lastFour: string;
+        lastTwo: string;
+    };
+    billingAddress?: {
+        recipientName?: string;
+        streetAddress?: string;
+        locality?: string;
+        countryCodeAlpha2?: string;
+    };
+};
+export type BTGooglePayError = {
+    code?: EXCEPTION_TYPES | GOOGLE_PAY_ERROR_TYPES;
+    message?: string;
+};
+export {};
 //# sourceMappingURL=types.d.ts.map

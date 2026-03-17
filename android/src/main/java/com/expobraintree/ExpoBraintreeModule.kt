@@ -35,7 +35,7 @@ class ExpoBraintreeModule(reactContext: ReactApplicationContext) :
         lateinit var venmoLauncher: VenmoLauncher
         lateinit var threeDSecureLauncher: ThreeDSecureLauncher
         lateinit var googlePayLauncher: GooglePayLauncher
-        
+
         private val moduleHandlers: ExpoBraintreeModuleHandlers = ExpoBraintreeModuleHandlers()
 
         private var threeDSecureClientRefInstance: ThreeDSecureClient? = null
@@ -382,7 +382,7 @@ class ExpoBraintreeModule(reactContext: ReactApplicationContext) :
     override fun onHostResume() {
         val activity = fragmentActivity ?: return
         val intent = activity.intent
-        
+
         // Check if returning via a valid PayPal/Venmo deep link
         if (intent?.data != null) {
             handleReturnToApp(intent)
@@ -391,7 +391,7 @@ class ExpoBraintreeModule(reactContext: ReactApplicationContext) :
             // Scenario: App resumed but no intent data found.
             // Check if we were waiting for a web-based flow (PayPal/Venmo).
             val isThreeDSActive = threeDSecureClientRefInstance != null
-            
+
             // Only cancel if a web flow was pending AND we are NOT in a 3DS flow.
             // 3DS v6 manages its own result callback and often resumes with null intent.
             if (isWebPaymentPending() && !isThreeDSActive) {
@@ -417,8 +417,8 @@ class ExpoBraintreeModule(reactContext: ReactApplicationContext) :
     private fun handleKotlinException(promise: Promise, ex: Exception) {
         val message = ex.message ?: "Kotlin Exception"
         promise.reject(
-            EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, 
-            message,                                
+            EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value,
+            message,
             SharedDataConverter.createError(EXCEPTION_TYPES.TOKENIZE_EXCEPTION.value, message)
         )
         clearStaticReferences()
